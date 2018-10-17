@@ -19,9 +19,9 @@ const issuer = new Issuer({
 
     it('asserts the issuer has a registration endpoint', function () {
       const issuer = new Issuer({}); // eslint-disable-line no-shadow
-      expect(function () {
-        issuer.Client.register();
-      }).to.throw('registration_endpoint must be configured on the issuer');
+      return issuer.Client.register().then(fail, ({ message }) => {
+        expect(message).to.eql('registration_endpoint must be configured on the issuer');
+      });
     });
 
     it('accepts and assigns the discovered metadata', function () {
@@ -39,7 +39,7 @@ const issuer = new Issuer({
       });
     });
 
-    it('is rejected with OpenIdConnectError upon oidc error', function () {
+    it('is rejected with OIDCResponseError upon oidc error', function () {
       nock('https://op.example.com')
         .post('/client/registration')
         .reply(500, {
@@ -49,13 +49,13 @@ const issuer = new Issuer({
 
       return issuer.Client.register({})
         .then(fail, function (error) {
-          expect(error.name).to.equal('OpenIdConnectError');
+          expect(error.name).to.equal('OIDCResponseError');
           expect(error).to.have.property('error', 'server_error');
           expect(error).to.have.property('error_description', 'bad things are happening');
         });
     });
 
-    it('is rejected with OpenIdConnectError upon oidc error in www-authenticate header', function () {
+    it('is rejected with OIDCResponseError upon oidc error in www-authenticate header', function () {
       nock('https://op.example.com')
         .post('/client/registration')
         .reply(401, 'Unauthorized', {
@@ -64,7 +64,7 @@ const issuer = new Issuer({
 
       return issuer.Client.register({})
         .then(fail, function (error) {
-          expect(error.name).to.equal('OpenIdConnectError');
+          expect(error.name).to.equal('OIDCResponseError');
           expect(error).to.have.property('error', 'invalid_token');
           expect(error).to.have.property('error_description', 'bad things are happening');
         });
@@ -152,11 +152,11 @@ const issuer = new Issuer({
         }, { keystore }));
       });
 
-      it('validates it is a keystore', function () {
-        [{}, [], 'not a keystore', 2, true, false].forEach(function (notkeystore) {
-          expect(function () {
-            issuer.Client.register({}, { keystore: notkeystore });
-          }).to.throw('keystore must be an instance of jose.JWK.KeyStore');
+      [{}, [], 'not a keystore', 2, true, false].forEach(function (notkeystore) {
+        it(`validates it is a keystore (${typeof notkeystore}, ${notkeystore})`, function () {
+          return issuer.Client.register({}, { keystore: notkeystore }).then(fail, ({ message }) => {
+            expect(message).to.eql('keystore must be an instance of jose.JWK.KeyStore');
+          });
         });
       });
 
@@ -164,9 +164,9 @@ const issuer = new Issuer({
         const keystore = jose.JWK.createKeyStore();
 
         return keystore.generate('oct', 32).then(() => {
-          expect(function () {
-            issuer.Client.register({}, { keystore });
-          }).to.throw('keystore must only contain private EC or RSA keys');
+          return issuer.Client.register({}, { keystore });
+        }).then(fail, ({ message }) => {
+          expect(message).to.eql('keystore must only contain private EC or RSA keys');
         });
       });
 
@@ -178,9 +178,9 @@ const issuer = new Issuer({
           x: 'FWZ9rSkLt6Dx9E3pxLybhdM6xgR5obGsj5_pqmnz5J4',
           y: '_n8G69C-A2Xl4xUW2lF0i8ZGZnk_KPYrhv4GbTGu5G4',
         }).then((key) => {
-          expect(function () {
-            issuer.Client.register({}, { keystore: key.keystore });
-          }).to.throw('keystore must only contain private EC or RSA keys');
+          return issuer.Client.register({}, { keystore: key.keystore });
+        }).then(fail, ({ message }) => {
+          expect(message).to.eql('keystore must only contain private EC or RSA keys');
         });
       });
     });

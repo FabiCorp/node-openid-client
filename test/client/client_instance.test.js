@@ -12,7 +12,7 @@ const jose = require('node-jose');
 const timekeeper = require('timekeeper');
 
 const TokenSet = require('../../lib/token_set');
-const OpenIdConnectError = require('../../lib/open_id_connect_error');
+const { OIDCResponseError } = require('../../lib/errors');
 const now = require('../../lib/util/unix_timestamp');
 const { Registry, Issuer } = require('../../lib');
 
@@ -334,11 +334,11 @@ const encode = object => base64url.encode(JSON.stringify(object));
           });
       });
 
-      it('rejects with OpenIdConnectError when part of the response', function () {
+      it('rejects with OIDCResponseError when part of the response', function () {
         return this.client.authorizationCallback('https://rp.example.com/cb', {
           error: 'invalid_request',
         }).then(fail, (error) => {
-          expect(error).to.be.instanceof(OpenIdConnectError);
+          expect(error).to.be.instanceof(OIDCResponseError);
           expect(error).to.have.property('error', 'invalid_request');
         });
       });
@@ -545,11 +545,11 @@ const encode = object => base64url.encode(JSON.stringify(object));
         });
       });
 
-      it('rejects with OpenIdConnectError when part of the response', function () {
+      it('rejects with OIDCResponseError when part of the response', function () {
         return this.client.oauthCallback('https://rp.example.com/cb', {
           error: 'invalid_request',
         }).then(fail, (error) => {
-          expect(error).to.be.instanceof(OpenIdConnectError);
+          expect(error).to.be.instanceof(OIDCResponseError);
           expect(error).to.have.property('error', 'invalid_request');
         });
       });
@@ -829,9 +829,10 @@ const encode = object => base64url.encode(JSON.stringify(object));
         const issuer = new Issuer({ userinfo_endpoint: 'https://op.example.com/me' });
         const client = new issuer.Client();
 
-        expect(function () {
-          client.userinfo('tokenValue', { via: 'body', verb: 'get' });
-        }).to.throw('can only send body on POST');
+        return client.userinfo('tokenValue', { via: 'body', verb: 'get' })
+          .then(fail, ({ message }) => {
+            expect(message).to.eql('can only send body on POST');
+          });
       });
 
       it('can submit access token in a query when get', function () {
@@ -851,12 +852,13 @@ const encode = object => base64url.encode(JSON.stringify(object));
         const issuer = new Issuer({ userinfo_endpoint: 'https://op.example.com/me' });
         const client = new issuer.Client();
 
-        expect(function () {
-          client.userinfo('tokenValue', { via: 'query', verb: 'post' });
-        }).to.throw('providers should only parse query strings for GET requests');
+        return client.userinfo('tokenValue', { via: 'query', verb: 'post' })
+          .then(fail, ({ message }) => {
+            expect(message).to.eql('providers should only parse query strings for GET requests');
+          });
       });
 
-      it('is rejected with OpenIdConnectError upon oidc error', function () {
+      it('is rejected with OIDCResponseError upon oidc error', function () {
         const issuer = new Issuer({ userinfo_endpoint: 'https://op.example.com/me' });
         const client = new issuer.Client();
 
@@ -869,13 +871,13 @@ const encode = object => base64url.encode(JSON.stringify(object));
 
         return client.userinfo()
           .then(fail, function (error) {
-            expect(error.name).to.equal('OpenIdConnectError');
+            expect(error.name).to.equal('OIDCResponseError');
             expect(error).to.have.property('error', 'invalid_token');
             expect(error).to.have.property('error_description', 'bad things are happening');
           });
       });
 
-      it('is rejected with OpenIdConnectError upon oidc error in www-authenticate header', function () {
+      it('is rejected with OIDCResponseError upon oidc error in www-authenticate header', function () {
         const issuer = new Issuer({ userinfo_endpoint: 'https://op.example.com/me' });
         const client = new issuer.Client();
 
@@ -887,7 +889,7 @@ const encode = object => base64url.encode(JSON.stringify(object));
 
         return client.userinfo()
           .then(fail, function (error) {
-            expect(error.name).to.equal('OpenIdConnectError');
+            expect(error.name).to.equal('OIDCResponseError');
             expect(error).to.have.property('error', 'invalid_token');
             expect(error).to.have.property('error_description', 'bad things are happening');
           });
@@ -1031,12 +1033,13 @@ const encode = object => base64url.encode(JSON.stringify(object));
             [endpoint]: `https://rp.example.com/token/${method}`,
           });
           const client = new issuer.Client();
-          expect(function () {
-            client[method]('tokenValue', { nonstring: 'value' });
-          }).to.throw('hint must be a string');
+
+          return client[method]('tokenValue', { nonstring: 'value' }).then(fail, ({ message }) => {
+            expect(message).to.eql('hint must be a string');
+          });
         });
 
-        it('is rejected with OpenIdConnectError upon oidc error', function () {
+        it('is rejected with OIDCResponseError upon oidc error', function () {
           nock('https://rp.example.com')
             .post(`/token/${method}`)
             .reply(500, {
@@ -1126,46 +1129,46 @@ const encode = object => base64url.encode(JSON.stringify(object));
 
     describe('#authFor', function () {
       context('when none', function () {
-        it('returns the body httpOptions', function () {
+        it('returns the body httpOptions', async function () {
           const issuer = new Issuer();
           const client = new issuer.Client({
             client_id: 'identifier',
             client_secret: 'secure',
             token_endpoint_auth_method: 'none',
           });
-          expect(client.authFor('token')).to.eql({
+          expect(await client.authFor('token')).to.eql({
             body: { client_id: 'identifier' },
           });
         });
       });
 
       context('when client_secret_post', function () {
-        it('returns the body httpOptions', function () {
+        it('returns the body httpOptions', async function () {
           const issuer = new Issuer();
           const client = new issuer.Client({
             client_id: 'identifier',
             client_secret: 'secure',
             token_endpoint_auth_method: 'client_secret_post',
           });
-          expect(client.authFor('token')).to.eql({
+          expect(await client.authFor('token')).to.eql({
             body: { client_id: 'identifier', client_secret: 'secure' },
           });
         });
       });
 
       context('when client_secret_basic', function () {
-        it('is the default', function () {
+        it('is the default', async function () {
           const issuer = new Issuer();
           const client = new issuer.Client({ client_id: 'identifier', client_secret: 'secure' });
-          expect(client.authFor('token')).to.eql({
+          expect(await client.authFor('token')).to.eql({
             headers: { Authorization: 'Basic aWRlbnRpZmllcjpzZWN1cmU=' },
           });
         });
 
-        it('works with non-text characters', function () {
+        it('works with non-text characters', async function () {
           const issuer = new Issuer();
           const client = new issuer.Client({ client_id: 'an:identifier', client_secret: 'some secure & non-standard secret' });
-          expect(client.authFor('token')).to.eql({
+          expect(await client.authFor('token')).to.eql({
             headers: { Authorization: 'Basic YW4lM0FpZGVudGlmaWVyOnNvbWUrc2VjdXJlKyUyNitub24tc3RhbmRhcmQrc2VjcmV0' },
           });
         });
@@ -1191,7 +1194,7 @@ const encode = object => base64url.encode(JSON.stringify(object));
           expect(this.auth).to.have.property('body').and.is.an('object');
           expect(this.auth.body).to.have.property(
             'client_assertion_type',
-            'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+            'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
           );
           expect(this.auth.body).to.have.property('client_assertion');
         });
@@ -1241,7 +1244,7 @@ const encode = object => base64url.encode(JSON.stringify(object));
           expect(this.auth).to.have.property('body').and.is.an('object');
           expect(this.auth.body).to.have.property(
             'client_assertion_type',
-            'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+            'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
           );
           expect(this.auth.body).to.have.property('client_assertion');
         });
@@ -1627,6 +1630,8 @@ const encode = object => base64url.encode(JSON.stringify(object));
     });
 
     it('allows exp skew', function () {
+      timekeeper.freeze(now());
+
       this.client.CLOCK_TOLERANCE = 5;
       const payload = {
         iss: this.issuer.issuer,
@@ -1979,13 +1984,13 @@ const encode = object => base64url.encode(JSON.stringify(object));
         });
     });
 
-    it('fails if tokenset without id_token is passed in', function () {
-      expect(() => {
-        this.client.validateIdToken(new TokenSet({
-          access_token: 'tokenValue',
-          // id_token not
-        }));
-      }).to.throw('id_token not present in TokenSet');
+    it('is rejected if tokenset without id_token is passed in', function () {
+      return this.client.validateIdToken(new TokenSet({
+        access_token: 'tokenValue',
+        // id_token not
+      })).then(fail, (error) => {
+        expect(error).to.have.property('message', 'id_token not present in TokenSet');
+      });
     });
   });
 
@@ -2159,7 +2164,7 @@ const encode = object => base64url.encode(JSON.stringify(object));
         });
       });
 
-      it('is rejected with OpenIdConnectError upon oidc error', function () {
+      it('is rejected with OIDCResponseError upon oidc error', function () {
         nock('https://src1.example.com')
           .get('/claims')
           .reply(401, {
@@ -2179,14 +2184,14 @@ const encode = object => base64url.encode(JSON.stringify(object));
 
         return this.client.fetchDistributedClaims(userinfo)
           .then(fail, function (error) {
-            expect(error.name).to.equal('OpenIdConnectError');
+            expect(error.name).to.equal('OIDCResponseError');
             expect(error).to.have.property('error', 'invalid_token');
             expect(error).to.have.property('error_description', 'bad things are happening');
             expect(error).to.have.property('src', 'src1');
           });
       });
 
-      it('is rejected with OpenIdConnectError upon oidc error in www-authenticate header', function () {
+      it('is rejected with OIDCResponseError upon oidc error in www-authenticate header', function () {
         nock('https://src1.example.com')
           .get('/claims')
           .reply(401, 'Unauthorized', {
@@ -2205,7 +2210,7 @@ const encode = object => base64url.encode(JSON.stringify(object));
 
         return this.client.fetchDistributedClaims(userinfo)
           .then(fail, function (error) {
-            expect(error.name).to.equal('OpenIdConnectError');
+            expect(error.name).to.equal('OIDCResponseError');
             expect(error).to.have.property('error', 'invalid_token');
             expect(error).to.have.property('error_description', 'bad things are happening');
             expect(error).to.have.property('src', 'src1');

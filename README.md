@@ -484,7 +484,7 @@ openid-client uses [got][got-library] for http requests with the following defau
 const DEFAULT_HTTP_OPTIONS = {
   followRedirect: false,
   headers: { 'User-Agent': `${pkg.name}/${pkg.version} (${pkg.homepage})` },
-  retries: 0,
+  retry: 0,
   timeout: 1500,
 };
 ```
@@ -515,7 +515,7 @@ Custom implementation:
  * options.form {Boolean}
  * options.query {Object}
  * options.timeout {Number}
- * options.retries {Number}
+ * options.retry {Number}
  * options.followRedirect {Boolean}
  */
 

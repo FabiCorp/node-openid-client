@@ -214,7 +214,7 @@ const fail = () => { throw new Error('expected promise to be rejected'); };
         });
     });
 
-    it('is rejected with OpenIdConnectError upon oidc error', function () {
+    it('is rejected with OIDCResponseError upon oidc error', function () {
       nock('https://op.example.com', { allowUnmocked: true })
         .get('/.well-known/openid-configuration')
         .reply(500, {
